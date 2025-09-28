@@ -89,13 +89,15 @@ class HueTile(BoxLayout):
         threading.Thread(target=work, daemon=True).start()
 
     def open_color_picker(self):
-        """Show a simple preset colour selection dialog."""
+        """Show a simple preset colour selection popup."""
         if not self.supports_color:
             return
-        from kivymd.uix.dialog import MDDialog
-        from kivymd.uix.gridlayout import MDGridLayout
+
+        from kivy.uix.popup import Popup
+        from kivy.uix.gridlayout import GridLayout
         from kivy.uix.button import Button
 
+        # Preset colours (Hue degrees and saturation percentages)
         presets = [
             ("Warm", 30, 90),
             ("Neutral", 45, 40),
@@ -106,27 +108,34 @@ class HueTile(BoxLayout):
             ("Red", 0, 90),
             ("Yellow", 55, 95),
         ]
-        grid = MDGridLayout(cols=3, padding="8dp", spacing="8dp", adaptive_height=True)
-        dlg = {"ref": None}
 
-        def choose(h, s):
-            def cb(*_):
-                self._commit_color(h, s)
-                if dlg["ref"]:
-                    dlg["ref"].dismiss()
+        # Create a grid of buttons
+        grid = GridLayout(cols=3, spacing=10, padding=10, size_hint_y=None)
+        grid.bind(minimum_height=grid.setter("height"))
 
+        popup = Popup(
+            title=f"Color · {self.item_name}",
+            content=grid,
+            size_hint=(0.8, 0.6),  # adjust as needed
+            auto_dismiss=True,
+        )
+
+        def choose_color(h, s):
+            def cb(*args):
+                popup.dismiss()      # close the popup
+                self._commit_color(h, s)  # apply the colour
             return cb
 
         for label, h, s in presets:
-            btn = Button(text=label, size_hint_y=None, height=40)
-            btn.bind(on_release=choose(h, s))
+            btn = Button(
+                text=label,
+                size_hint=(1, None),
+                height=40,
+                on_release=choose_color(h, s),
+            )
             grid.add_widget(btn)
 
-        dialog = MDDialog(
-            title=f"Color · {self.item_name}", type="custom", content_cls=grid
-        )
-        dlg["ref"] = dialog
-        dialog.open()
+        popup.open()
 
     def _commit_color(self, hue_deg, sat_pct):
         def work():
