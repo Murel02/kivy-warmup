@@ -1,0 +1,5 @@
+.venv/
+
+__pycace__/
+
+.env
