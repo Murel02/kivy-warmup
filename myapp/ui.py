@@ -92,7 +92,9 @@ class HueTile(BoxLayout):
                     )
                 )
             except Exception as e:
-                Clock.schedule_once(MDApp.get_running_app().show_message(f"Error: {e}"))
+                Clock.schedule_once(
+                    lambda *_: MDApp.get_running_app().show_message(f"Error: {e}")
+                )
 
         threading.Thread(target=work, daemon=True).start()
 
