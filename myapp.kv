@@ -21,7 +21,7 @@
 
         MDLabel:
             id: status_lbl
-            text: "Loading…" if root.loading_lights else ""
+            text: "Loading…" if root.loading_items else ""
             theme_text_color: "Secondary"
             halign: "center"
             size_hint_y: None
@@ -36,7 +36,7 @@
                 padding: "10dp"
                 adaptive_height: True
 
-<LightTile>:
+<HueTile>:
     size_hint_y: None
     height: "150dp"
     MDCard:
@@ -51,7 +51,7 @@
             spacing: "6dp"
             MDLabel:
                 id: name_lbl
-                text: root.light_name
+                text: root.item_name
                 shorten: True
                 shorten_from: "right"
                 halign: "left"
@@ -94,59 +94,8 @@
                 on_value: root.on_slider_change(self.value)
                 on_touch_up: root.on_slider_release(*args)
 
-<RoomTile>:
-    size_hint_y: None
-    height: "150dp"
-    MDCard:
-        orientation: "vertical"
-        padding: "10dp"
-        radius: [14]
-        md_bg_color: app.on_color if root.is_on else app.off_color
+<LightTile@HueTile>:
+    # No extra rules; inherits everything from HueTile
 
-        MDBoxLayout:
-            size_hint_y: None
-            height: "26dp"
-            spacing: "6dp"
-            MDLabel:
-                id: name_lbl
-                text: root.room_name
-                shorten: True
-                shorten_from: "right"
-                halign: "left"
-            MDLabel:
-                id: state_lbl
-                text: "ON" if root.is_on else "OFF"
-                halign: "right"
-                size_hint_x: None
-                width: "54dp"
-
-        MDBoxLayout:
-            size_hint_y: None
-            height: "40dp"
-            spacing: "8dp"
-            MDButton:
-                text: "Toggle"
-                on_release: root.toggle()
-            MDButton:
-                id: color_btn
-                text: "Color"
-                disabled: True
-                on_release: root.open_color_picker()
-
-        MDBoxLayout:
-            size_hint_y: None
-            height: "40dp"
-            spacing: "8dp"
-            MDLabel:
-                text: f"{int(root.brightness)}%"
-                size_hint_x: None
-                width: "52dp"
-                halign: "left"
-                theme_text_color: "Secondary"
-            MDSlider:
-                min: 0
-                max: 100
-                value: root.brightness
-                step: 1
-                on_value: root.on_slider_change(self.value)
-                on_touch_up: root.on_slider_release(*args)
+<RoomTile@HueTile>:
+    # No extra rules; inherits everything from HueTile

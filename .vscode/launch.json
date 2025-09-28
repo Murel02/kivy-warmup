@@ -2,10 +2,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Kivy: Run main.py",
+      "name": "Kivy: Run app.py",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/main.py",
+      "program": "${workspaceFolder}/app.py",
       "console": "integratedTerminal",
       "envFile": "${workspaceFolder}/.env"
     }
