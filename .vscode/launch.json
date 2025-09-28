@@ -2,12 +2,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Kivy: Run app.py",
+      "name": "Kivy (myapp)",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/app.py",
-      "console": "integratedTerminal",
-      "envFile": "${workspaceFolder}/.env"
+      "module": "myapp.app",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": true
     }
   ]
 }
