@@ -10,7 +10,8 @@
             elevation: 2
             left_action_items: [["refresh", lambda x: root.fetch()]]
             right_action_items:
-                [["account-group-outline", lambda x: root.switch_view("rooms")],
+                [["cog", lambda x: root.open_settings()],
+                ["account-group-outline", lambda x: root.switch_view("rooms")],
                 ["lightbulb-outline",     lambda x: root.switch_view("lights")]]
 
         MDLabel:
@@ -35,6 +36,41 @@
                 spacing: "10dp"
                 padding: "10dp"
                 adaptive_height: True
+
+<SettingsScreen>:
+    MDBoxLayout:
+        orientation: "vertical"
+        padding: "20dp"
+        spacing: "20dp"
+        MDTopAppBar:
+            title: "Settings"
+            elevation: 2
+            left_action_items: [["arrow-left", lambda x: root.go_back()]]
+        MDTextField:
+            hint_text: "Hue Bridge IP"
+            text: root.bridge_ip
+            on_text: root.bridge_ip = self.text
+        MDTextField:
+            hint_text: "Hue Username"
+            text: root.username
+            on_text: root.username = self.text
+        MDLabel:
+            id: status_lbl
+            text: ""
+            theme_text_color: "Secondary"
+            halign: "center"
+            size_hint_y: None
+            height: "20dp"
+        MDBoxLayout:
+            size_hint_y: None
+            height: "60dp"
+            spacing: "20dp"
+            Button:
+                text: "Save"
+                on_release: root.save()
+            Button:
+                text: "Cancel"
+                on_release: root.manager.current = "main"
 
 <HueTile>:
     size_hint_y: None
@@ -66,11 +102,10 @@
             size_hint_y: None
             height: "40dp"
             spacing: "8dp"
-            MDButton:
+            Button:
                 text: "Toggle"
-                style: "text"
                 on_release: root.toggle()
-            MDButton:
+            Button:
                 id: color_btn
                 text: "Color"
                 disabled: True
@@ -81,7 +116,7 @@
             height: "40dp"
             spacing: "8dp"
             MDLabel:
-                text: f"{int(root.brightness)}%"
+                text: str(int(root.brightness)) + "%"
                 size_hint_x: None
                 width: "52dp"
                 halign: "left"
@@ -94,8 +129,11 @@
                 on_value: root.on_slider_change(self.value)
                 on_touch_up: root.on_slider_release(*args)
 
-<LightTile@HueTile>:
-    # No extra rules; inherits everything from HueTile
 
-<RoomTile@HueTile>:
-    # No extra rules; inherits everything from HueTile
+<LightTile>:
+    # inherits visuals from HueTile by copying its content:
+    # If you want to *reuse* HueTile’s layout, do this instead:
+    # <- HueTile   (see note below)
+
+<RoomTile>:
+    # <- HueTile

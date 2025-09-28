@@ -94,7 +94,7 @@ class HueTile(BoxLayout):
             return
         from kivymd.uix.dialog import MDDialog
         from kivymd.uix.gridlayout import MDGridLayout
-        from kivymd.uix.button import MDRaisedButton
+        from kivy.uix.button import Button
 
         presets = [
             ("Warm", 30, 90),
@@ -118,7 +118,8 @@ class HueTile(BoxLayout):
             return cb
 
         for label, h, s in presets:
-            btn = MDRaisedButton(text=label, on_release=choose(h, s))
+            btn = Button(text=label, size_hint_y=None, height=40)
+            btn.bind(on_release=choose(h, s))
             grid.add_widget(btn)
 
         dialog = MDDialog(
@@ -172,3 +173,5 @@ class RoomTile(HueTile):
 
     def _call_api_color(self, hue_deg: float, sat_pct: float):
         set_room_color_hs(int(self.item_id), hue_deg, sat_pct)
+        
+

@@ -9,7 +9,7 @@ from kivy.core.window import Window
 from kivy.lang import Builder
 from pathlib import Path
 
-from .hue import list_lights_detailed, list_rooms_detailed
+from .hue import list_lights_detailed, list_rooms_detailed, load_config, save_config
 from .ui import LightTile, RoomTile
 
 
@@ -130,11 +130,44 @@ class MainScreen(MDScreen):
             size_hint=(0.7, 0.5),
         ).open()
 
+    def open_settings(self):
+        self.manager.current = "settings"
+
 
 class SettingsScreen(MDScreen):
-    """Placeholder settings screen to be expanded later."""
+    """Screen for editing Hue bridge settings."""
 
-    pass
+    bridge_ip = StringProperty("")
+    username = StringProperty("")
+    def go_back(self, *_):
+        self.manager.current = "main"
+
+    def on_pre_enter(self):
+        """Load existing settings when entering the screen."""
+        try:
+            cfg = load_config()
+            self.bridge_ip = cfg.get("bridge_ip", "")
+            self.username = cfg.get("username", "")
+        except Exception as e:
+            # If no config yet, leave fields blank
+            print(f"Could not load Hue config: {e}")
+
+    def save(self):
+        """Save the entered settings to hue_config.json."""
+        ip = self.bridge_ip.strip()
+        user = self.username.strip()
+        if not ip or not user:
+            self.ids.status_lbl.text = "Bridge IP and username are required"
+            return
+        try:
+            save_config(ip, user)
+            self.ids.status_lbl.text = "Settings saved. Returning…"
+            # Small delay before going back
+            from kivy.clock import Clock
+
+            Clock.schedule_once(self.go_back, 1.5)
+        except Exception as e:
+            self.ids.status_lbl.text = f"Error: {e}"
 
 
 class HueApp(MDApp):
