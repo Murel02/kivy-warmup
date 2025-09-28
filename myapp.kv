@@ -1,0 +1,152 @@
+#:kivy 2.3.0
+
+<MainScreen>:
+    MDBoxLayout:
+        orientation: "vertical"
+        spacing: "8dp"
+
+        MDTopAppBar:
+            title: "Hue Control"
+            elevation: 2
+            left_action_items: [["refresh", lambda x: root.fetch()]]
+            right_action_items:
+                [["account-group-outline", lambda x: root.switch_view("rooms")],
+                ["lightbulb-outline",     lambda x: root.switch_view("lights")]]
+
+        MDLabel:
+            text: root.current_time
+            halign: "center"
+            size_hint_y: None
+            height: "40dp"
+
+        MDLabel:
+            id: status_lbl
+            text: "Loading…" if root.loading_lights else ""
+            theme_text_color: "Secondary"
+            halign: "center"
+            size_hint_y: None
+            height: "20dp"
+
+        ScrollView:
+            do_scroll_x: False
+            MDGridLayout:
+                id: item_grid
+                cols: 2
+                spacing: "10dp"
+                padding: "10dp"
+                adaptive_height: True
+
+<LightTile>:
+    size_hint_y: None
+    height: "150dp"
+    MDCard:
+        orientation: "vertical"
+        padding: "10dp"
+        radius: [14]
+        md_bg_color: app.on_color if root.is_on else app.off_color
+
+        MDBoxLayout:
+            size_hint_y: None
+            height: "26dp"
+            spacing: "6dp"
+            MDLabel:
+                id: name_lbl
+                text: root.light_name
+                shorten: True
+                shorten_from: "right"
+                halign: "left"
+            MDLabel:
+                id: state_lbl
+                text: "ON" if root.is_on else "OFF"
+                halign: "right"
+                size_hint_x: None
+                width: "54dp"
+
+        MDBoxLayout:
+            size_hint_y: None
+            height: "40dp"
+            spacing: "8dp"
+            MDButton:
+                text: "Toggle"
+                style: "text"
+                on_release: root.toggle()
+            MDButton:
+                id: color_btn
+                text: "Color"
+                disabled: True
+                on_release: root.open_color_picker()
+
+        MDBoxLayout:
+            size_hint_y: None
+            height: "40dp"
+            spacing: "8dp"
+            MDLabel:
+                text: f"{int(root.brightness)}%"
+                size_hint_x: None
+                width: "52dp"
+                halign: "left"
+                theme_text_color: "Secondary"
+            MDSlider:
+                min: 0
+                max: 100
+                value: root.brightness
+                step: 1
+                on_value: root.on_slider_change(self.value)
+                on_touch_up: root.on_slider_release(*args)
+
+<RoomTile>:
+    size_hint_y: None
+    height: "150dp"
+    MDCard:
+        orientation: "vertical"
+        padding: "10dp"
+        radius: [14]
+        md_bg_color: app.on_color if root.is_on else app.off_color
+
+        MDBoxLayout:
+            size_hint_y: None
+            height: "26dp"
+            spacing: "6dp"
+            MDLabel:
+                id: name_lbl
+                text: root.room_name
+                shorten: True
+                shorten_from: "right"
+                halign: "left"
+            MDLabel:
+                id: state_lbl
+                text: "ON" if root.is_on else "OFF"
+                halign: "right"
+                size_hint_x: None
+                width: "54dp"
+
+        MDBoxLayout:
+            size_hint_y: None
+            height: "40dp"
+            spacing: "8dp"
+            MDButton:
+                text: "Toggle"
+                on_release: root.toggle()
+            MDButton:
+                id: color_btn
+                text: "Color"
+                disabled: True
+                on_release: root.open_color_picker()
+
+        MDBoxLayout:
+            size_hint_y: None
+            height: "40dp"
+            spacing: "8dp"
+            MDLabel:
+                text: f"{int(root.brightness)}%"
+                size_hint_x: None
+                width: "52dp"
+                halign: "left"
+                theme_text_color: "Secondary"
+            MDSlider:
+                min: 0
+                max: 100
+                value: root.brightness
+                step: 1
+                on_value: root.on_slider_change(self.value)
+                on_touch_up: root.on_slider_release(*args)
