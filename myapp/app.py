@@ -8,8 +8,16 @@ from kivymd.app import MDApp
 from kivy.core.window import Window
 from kivy.lang import Builder
 from pathlib import Path
+import threading
+from kivy.app import App
 
-from .hue import list_lights_detailed, list_rooms_detailed, load_config, save_config
+from .hue import (
+    list_lights_detailed,
+    list_rooms_detailed,
+    load_config,
+    save_config,
+    discover_bridges,
+)
 from .ui import LightTile, RoomTile
 
 
@@ -19,18 +27,35 @@ class MainScreen(MDScreen):
     view = StringProperty("rooms")
     _gen = NumericProperty(0)
     _initialized = BooleanProperty(False)
-
-    def switch_view(self, which: str):
-        self.view = which
-        self.fetch()
-
-    def on_pre_enter(self):
+    
+    def on_pre_enter(self, *args):
         if not self._initialized:
             self._initialized = True
             Clock.schedule_once(lambda *_: self.fetch())
             Clock.schedule_interval(self.update_time, 1)
             self.update_columns(Window.size)
             Window.bind(size=lambda *_: self.update_columns(Window.size))
+            
+        Clock.schedule_once(lambda *_: self._update_topbar_active())
+
+    def switch_view(self, which: str):
+        self.view = which
+        self._update_topbar_active()
+        self.fetch()
+        
+    def _update_topbar_active(self):
+        btn_rooms  = self.ids.get("btn_rooms")
+        btn_lights = self.ids.get("btn_lights")
+
+        def paint(btn, active):
+            if not btn:
+                return
+            # Brug KivyMD 2.x tema-navne: "Primary", "Secondary", "Hint", "Error", "Custom"
+            btn.theme_icon_color = "Primary" if active else "Secondary"
+            # VIGTIGT: Sæt IKKE btn.icon_color når du ikke bruger "Custom"
+
+        paint(btn_rooms,  self.view == "rooms")
+        paint(btn_lights, self.view == "lights")
 
     def update_columns(self, size):
         """Adjust number of columns based on window width."""
@@ -94,8 +119,6 @@ class MainScreen(MDScreen):
             finally:
                 Clock.schedule_once(lambda *_: setattr(self, "loading_items", False))
 
-        import threading
-
         threading.Thread(target=work, daemon=True).start()
 
     def fetch_lights_async(self, gen: int):
@@ -130,8 +153,6 @@ class MainScreen(MDScreen):
                 Clock.schedule_once(lambda *_: self.show_error(str(e)))
             finally:
                 Clock.schedule_once(lambda *_: setattr(self, "loading_items", False))
-
-        import threading
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -180,6 +201,36 @@ class SettingsScreen(MDScreen):
             # If no config yet, leave fields blank
             print(f"Could not load Hue config: {e}")
 
+    def discover(self) -> None:
+        """Attempt to discover Hue bridges and update the IP field"""
+        self.ids.status_lbl.text = "Discovering Hue bridges..."
+
+        def work():
+            try:
+                ips = discover_bridges()
+
+                def assign():
+                    if not ips:
+                        self.ids.status_lbl.text = "No Hue bridges found on network"
+                    elif len(ips) == 1:
+                        self.bridge_ip = ips[0]
+                        self.ids.status_lbl.text = f"Discovered bridge at {ips[0]}"
+                    else:
+                        self.bridge_ip = ips[0]
+                        self.ids.status_lbl.text = (
+                            f"Found {len(ips)} bridges: using {ips[0]}"
+                        )
+
+                Clock.schedule_once(lambda *_: assign())
+            except Exception as e:
+                Clock.schedule_once(
+                    lambda *_: setattr(
+                        self.ids.status_lbl, "text", f"Discover error: {e}"
+                    )
+                )
+
+        threading.Thread(target=work, daemon=True).start()
+
     def save(self):
         """Save the entered settings to hue_config.json."""
         ip = self.bridge_ip.strip()
@@ -202,7 +253,7 @@ class HueApp(MDApp):
     theme_color = [0.08, 0.08, 0.12, 1]
     on_color = [0.30, 0.50, 0.34, 1]
     off_color = [0.15, 0.16, 0.19, 1]
-    
+
     def show_message(self, text, duration=2):
         """Proxy method so tiles can display messages via the running app."""
         if self.root:

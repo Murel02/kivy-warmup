@@ -6,6 +6,8 @@ from kivy.clock import Clock
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivymd.app import MDApp
+from kivy.uix.colorpicker import ColorPicker
+import colorsys
 import threading
 
 
@@ -145,6 +147,42 @@ class HueTile(BoxLayout):
                 on_release=choose_color(h, s),
             )
             grid.add_widget(btn)
+            
+        # custom colour button
+        def open_custom_picker(*_) -> None:
+            cp = ColorPicker()
+            layout = BoxLayout(orientation="vertical")
+            layout.add_widget(cp)
+            btn_box = BoxLayout(size_hint_y=None, height=40, spacing=10, padding=10)
+            ok_btn = Button(text="OK")
+            cancel_btn = Button(text="Cancel")
+            btn_box.add_widget(ok_btn)
+            btn_box.add_widget(cancel_btn)
+            layout.add_widget(btn_box)
+            custom_popup = Popup(
+                title=f"Choose colour for {self.item_name}",
+                content=layout,
+                size_hint=(0.9, 0.9),
+                auto_dismiss=False,
+            )
+
+            def on_ok(*args) -> None:
+                r, g, b = cp.color[:3]
+                h, s, _ = colorsys.rgb_to_hsv(r, g, b)
+                self._commit_color(h * 360.0, s * 100.0)
+                custom_popup.dismiss()
+
+            ok_btn.bind(on_release=on_ok)
+            cancel_btn.bind(on_release=lambda *_: custom_popup.dismiss())
+            custom_popup.open()
+
+        custom_btn = Button(
+            text="Custom",
+            size_hint=(1, None),
+            height=40,
+            on_release=open_custom_picker,
+        )
+        grid.add_widget(custom_btn)
 
         popup.open()
 

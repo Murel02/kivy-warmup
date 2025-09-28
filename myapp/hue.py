@@ -18,7 +18,7 @@ import json
 import os
 from pathlib import Path
 import requests
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 CONFIG_PATH = Path("hue_config.json")
 _session = requests.Session()
@@ -174,3 +174,20 @@ def set_room_color_hs(group_id: int, hue_degrees: float, sat_percent: float) -> 
         timeout=4,
     ).json()
     return _raise_if_error(data)
+
+def discover_bridges() -> List[str]:
+    """
+    Discover Hue bridges on the local network using the Phillips Hue discovery service.
+    """
+    try:
+        resp = _session.get("https://discovery.meethue.com", timeout=5)
+        data = resp.json()
+        if isinstance (data, list):
+            return [
+                item.get("internalipaddress")
+                for item in data
+                if isinstance(item, dict) and item.get("internalipaddress")
+            ]
+        return []
+    except Exception as e:
+        raise RuntimeError(f"Bridge discovery failed: {e}") from e

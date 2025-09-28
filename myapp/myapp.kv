@@ -8,12 +8,30 @@
         MDTopAppBar:
             title: "Hue Control"
             elevation: 2
-            left_action_items: [["refresh", lambda x: root.fetch()]]
-            right_action_items:
-                [["cog", lambda x: root.open_settings()],
-                ["account-group-outline", lambda x: root.switch_view("rooms")],
-                ["lightbulb-outline",     lambda x: root.switch_view("lights")]]
+            MDActionTopAppBarButton:
+                icon: "refresh"
+                type: "left"
+                tooltip_text: "Refresh"
+                on_release: root.fetch()
+            MDActionTopAppBarButton:
+                icon: "cog"
+                type: "right"
+                tooltip_text: "Settings"
+                on_release: root.open_settings()
 
+            MDActionTopAppBarButton:
+                id: btn_rooms
+                icon: "account-group-outline"
+                type: "right"
+                tooltip_text: "Rooms"
+                on_release: root.switch_view("rooms")
+
+            MDActionTopAppBarButton:
+                id: btn_lights
+                icon: "lightbulb-outline"
+                type: "right"
+                tooltip_text: "Lights"
+                on_release: root.switch_view("lights")
         MDLabel:
             text: root.current_time
             halign: "center"
@@ -70,10 +88,13 @@
             Button:
                 text: "Cancel"
                 on_release: root.manager.current = "main"
+            Button:
+                text: "Discover"
+                on_release: root.discover()
 
 <HueTile>:
     size_hint_y: None
-    height: "150dp"
+    height: "170dp"
     MDCard:
         orientation: "vertical"
         padding: "10dp"
