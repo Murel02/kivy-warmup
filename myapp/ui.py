@@ -5,6 +5,7 @@ from kivy.properties import NumericProperty, StringProperty, BooleanProperty
 from kivy.clock import Clock
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
+from kivymd.app import MDApp
 import threading
 
 
@@ -82,9 +83,16 @@ class HueTile(BoxLayout):
         def work():
             try:
                 self._call_api_brightness(percent)
-                Clock.schedule_once(lambda *_: self._set_on(percent > 0))
+                Clock.schedule_once(
+                    lambda *_: (
+                        self._set_on(percent > 0),
+                        MDApp.get_running_app().show_message(
+                            f"{self.item_name} brightness set to {percent}%"
+                        ),
+                    )
+                )
             except Exception as e:
-                Clock.schedule_once(lambda *_: self._popup("Hue Error", str(e)))
+                Clock.schedule_once(MDApp.get_running_app().show_message(f"Error: {e}"))
 
         threading.Thread(target=work, daemon=True).start()
 
@@ -122,8 +130,9 @@ class HueTile(BoxLayout):
 
         def choose_color(h, s):
             def cb(*args):
-                popup.dismiss()      # close the popup
+                popup.dismiss()  # close the popup
                 self._commit_color(h, s)  # apply the colour
+
             return cb
 
         for label, h, s in presets:
@@ -182,5 +191,3 @@ class RoomTile(HueTile):
 
     def _call_api_color(self, hue_deg: float, sat_pct: float):
         set_room_color_hs(int(self.item_id), hue_deg, sat_pct)
-        
-

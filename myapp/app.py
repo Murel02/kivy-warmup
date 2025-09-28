@@ -29,6 +29,21 @@ class MainScreen(MDScreen):
             self._initialized = True
             Clock.schedule_once(lambda *_: self.fetch())
             Clock.schedule_interval(self.update_time, 1)
+            self.update_columns(Window.size)
+            Window.bind(size=lambda *_: self.update_columns(Window.size))
+
+    def update_columns(self, size):
+        """Adjust number of columns based on window width."""
+        width, _ = size
+        if width < 800:
+            cols = 1
+        elif width < 1200:
+            cols = 2
+        else:
+            cols = 3
+        grid = self.ids.get("item_grid")
+        if grid:
+            grid.cols = cols
 
     def on_leave(self):
         Clock.unschedule(self.update_time)
@@ -130,6 +145,18 @@ class MainScreen(MDScreen):
             size_hint=(0.7, 0.5),
         ).open()
 
+    def show_message(self, text, duration=2):
+        """Display a transient message at the bottom of the screen."""
+        status_lbl = self.ids.get("status_lbl")
+        if status_lbl:
+            status_lbl.text = text
+
+            def clear_message(*_):
+                if status_lbl.text == text:
+                    status_lbl.text = ""
+
+            Clock.schedule_once(clear_message, duration)
+
     def open_settings(self):
         self.manager.current = "settings"
 
@@ -139,6 +166,7 @@ class SettingsScreen(MDScreen):
 
     bridge_ip = StringProperty("")
     username = StringProperty("")
+
     def go_back(self, *_):
         self.manager.current = "main"
 
@@ -174,6 +202,13 @@ class HueApp(MDApp):
     theme_color = [0.08, 0.08, 0.12, 1]
     on_color = [0.30, 0.50, 0.34, 1]
     off_color = [0.15, 0.16, 0.19, 1]
+    
+    def show_message(self, text, duration=2):
+        """Proxy method so tiles can display messages via the running app."""
+        if self.root:
+            main_screen = self.root.get_screen("main")
+            if main_screen:
+                main_screen.show_message(text, duration)
 
     def build(self):
         self.theme_cls.theme_style = "Dark"
