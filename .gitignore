@@ -1,5 +1,9 @@
+# Virtual environments and caches
 .venv/
+__pycache__/
 
-__pycace__/
-
+# Secrets and environment variables
 .env
+
+# OS-specific files
+*.DS_Store
