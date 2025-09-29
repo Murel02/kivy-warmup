@@ -1,252 +1,325 @@
-# app.py
-
-from kivy.clock import Clock
-from kivy.properties import BooleanProperty, NumericProperty, StringProperty
-from kivymd.uix.screen import MDScreen
-from kivy.uix.screenmanager import ScreenManager
-from kivymd.app import MDApp
-from kivy.core.window import Window
-from kivy.lang import Builder
 from pathlib import Path
 import threading
-from kivy.app import App
+import time
+
+from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.lang import Builder
+from kivy.metrics import dp
+from kivy.properties import (
+    BooleanProperty,
+    ListProperty,
+    NumericProperty,
+    StringProperty,
+)
+from kivy.uix.screenmanager import ScreenManager
+from kivymd.app import MDApp
+from kivymd.uix.screen import MDScreen
 
 from .hue import (
-    list_lights_detailed,
+    list_lights_detailed_for_room,  # <-- use room-aware lights fetch
     list_rooms_detailed,
     load_config,
     save_config,
     discover_bridges,
 )
-from .ui import LightTile, RoomTile
+
+# Fullscreen for the 7" display
+Window.fullscreen = "auto"
+
+
+# ---------------------------
+#        MAIN (ROOMS)
+# ---------------------------
 
 
 class MainScreen(MDScreen):
     current_time = StringProperty("")
-    loading_items = BooleanProperty(False)
-    view = StringProperty("rooms")
-    _gen = NumericProperty(0)
+    loading_rooms = BooleanProperty(False)
+
+    rooms = ListProperty([])
+    PAGE_SIZE = NumericProperty(12)
+    rooms_page = NumericProperty(0)
+    rooms_page_text = StringProperty("1/1")
+
     _initialized = BooleanProperty(False)
-    
-    def on_pre_enter(self, *args):
+    _gen_rooms = NumericProperty(0)
+
+    def on_pre_enter(self, *_):
         if not self._initialized:
             self._initialized = True
-            Clock.schedule_once(lambda *_: self.fetch())
             Clock.schedule_interval(self.update_time, 1)
-            self.update_columns(Window.size)
-            Window.bind(size=lambda *_: self.update_columns(Window.size))
-            
-        Clock.schedule_once(lambda *_: self._update_topbar_active())
-
-    def switch_view(self, which: str):
-        self.view = which
-        self._update_topbar_active()
-        self.fetch()
-        
-    def _update_topbar_active(self):
-        btn_rooms  = self.ids.get("btn_rooms")
-        btn_lights = self.ids.get("btn_lights")
-
-        def paint(btn, active):
-            if not btn:
-                return
-            # Brug KivyMD 2.x tema-navne: "Primary", "Secondary", "Hint", "Error", "Custom"
-            btn.theme_icon_color = "Primary" if active else "Secondary"
-            # VIGTIGT: Sæt IKKE btn.icon_color når du ikke bruger "Custom"
-
-        paint(btn_rooms,  self.view == "rooms")
-        paint(btn_lights, self.view == "lights")
-
-    def update_columns(self, size):
-        """Adjust number of columns based on window width."""
-        width, _ = size
-        if width < 800:
-            cols = 1
-        elif width < 1200:
-            cols = 2
-        else:
-            cols = 3
-        grid = self.ids.get("item_grid")
-        if grid:
-            grid.cols = cols
-
-    def on_leave(self):
-        Clock.unschedule(self.update_time)
+            self._tune_for_small_screen()
+            Window.bind(size=lambda *_: self._tune_for_small_screen())
+            Clock.schedule_once(lambda *_: self.fetch_rooms_async())
 
     def update_time(self, dt):
-        import time
-
         self.current_time = time.strftime("%H:%M:%S")
 
-    def fetch(self):
-        self._gen += 1
-        gen = int(self._gen)
-        if self.view == "rooms":
-            self.fetch_rooms_async(gen)
-        else:
-            self.fetch_lights_async(gen)
+    def _tune_for_small_screen(self):
+        """Bigger room tiles on 800x480 by using fewer columns."""
+        W, H = Window.size
+        cols = 3 if W >= 760 else 2
 
-    def fetch_rooms_async(self, gen: int):
-        if self.loading_items:
-            return
-        self.loading_items = True
+        g = self.ids.get("rooms_grid")
+        if g:
+            per_grid_w = W - dp(8 * 2)  # container padding
+            tile_w = (per_grid_w - dp(6) * (cols - 1)) / cols
+            # compact height to avoid a big top gap
+            tile_h = max(dp(120), min(dp(135), tile_w * 0.7))
+            g.cols = cols
+            g.col_default_width = tile_w
+            g.row_default_height = tile_h
 
-        def work():
-            try:
-                details = list_rooms_detailed()
+        rows = 2
+        self.PAGE_SIZE = cols * rows
+        self._refresh_page_label()
 
-                def assign():
-                    if gen != self._gen:
-                        return
-                    grid = self.ids.item_grid
-                    grid.clear_widgets()
-                    for rid, d in sorted(
-                        details.items(), key=lambda kv: kv[1]["name"].lower()
-                    ):
-                        grid.add_widget(
-                            RoomTile(
-                                item_id=int(rid),
-                                item_name=d["name"],
-                                is_on=bool(d["on"]),
-                                brightness=int(d["bri"]),
-                                supports_color=bool(d["supports_color"]),
-                            )
-                        )
-
-                Clock.schedule_once(lambda *_: assign())
-            except Exception as e:
-                Clock.schedule_once(lambda *_: self.show_error(str(e)))
-            finally:
-                Clock.schedule_once(lambda *_: setattr(self, "loading_items", False))
-
-        threading.Thread(target=work, daemon=True).start()
-
-    def fetch_lights_async(self, gen: int):
-        if self.loading_items:
-            return
-        self.loading_items = True
+    def fetch_rooms_async(self):
+        self.loading_rooms = True
+        self._gen_rooms += 1
+        gen = int(self._gen_rooms)
 
         def work():
             try:
-                details = list_lights_detailed()
+                details = list_rooms_detailed()  # {id: {...}}
+                items = []
+                for rid, d in details.items():
+                    items.append(
+                        {
+                            "id": int(rid),
+                            "name": d.get("name", f"Room {rid}"),
+                            "on": bool(d.get("on", False)),
+                            "bri": int(d.get("bri", 0)),
+                            "supports_color": bool(d.get("supports_color", False)),
+                        }
+                    )
+                items.sort(key=lambda x: x["name"].lower())
 
                 def assign():
-                    if gen != self._gen:
+                    if gen != self._gen_rooms:
                         return
-                    grid = self.ids.item_grid
-                    grid.clear_widgets()
-                    for lid, d in sorted(
-                        details.items(), key=lambda kv: kv[1]["name"].lower()
-                    ):
-                        grid.add_widget(
-                            LightTile(
-                                item_id=int(lid),
-                                item_name=d["name"],
-                                is_on=bool(d["on"]),
-                                brightness=int(d["bri"]),
-                                supports_color=bool(d["supports_color"]),
-                            )
-                        )
+                    self.rooms = items
+                    self.rooms_page = 0
+                    self.update_rooms_view()
 
                 Clock.schedule_once(lambda *_: assign())
             except Exception as e:
-                Clock.schedule_once(lambda *_: self.show_error(str(e)))
+                msg = f"Rooms error: {e}"
+                Clock.schedule_once(lambda *_: self.show_message(msg, 3))
             finally:
-                Clock.schedule_once(lambda *_: setattr(self, "loading_items", False))
+                Clock.schedule_once(lambda *_: setattr(self, "loading_rooms", False))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def show_error(self, message: str):
-        from kivy.uix.popup import Popup
-        from kivy.uix.label import Label
+    def update_rooms_view(self):
+        grid = self.ids.get("rooms_grid")
+        if not grid:
+            return
+        grid.clear_widgets()
+        start = self.rooms_page * self.PAGE_SIZE
+        page = self.rooms[start : start + self.PAGE_SIZE]
+        from .ui import RoomTile
 
-        Popup(
-            title="Hue Error",
-            content=Label(text=message),
-            size_hint=(0.7, 0.5),
-        ).open()
+        for r in page:
+            grid.add_widget(
+                RoomTile(
+                    item_id=r["id"],
+                    item_name=r["name"],
+                    is_on=r["on"],
+                    brightness=r["bri"],
+                    supports_color=r["supports_color"],
+                )
+            )
+        self._refresh_page_label()
+
+    def page_rooms(self, delta: int):
+        total_pages = max(1, (len(self.rooms) + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        self.rooms_page = (self.rooms_page + delta) % total_pages
+        self.update_rooms_view()
+
+    def _refresh_page_label(self):
+        total_pages = max(1, (len(self.rooms) + self.PAGE_SIZE - 1) // self.PAGE_SIZE)
+        self.rooms_page_text = f"{min(self.rooms_page + 1, total_pages)}/{total_pages}"
 
     def show_message(self, text, duration=2):
-        """Display a transient message at the bottom of the screen."""
         status_lbl = self.ids.get("status_lbl")
-        if status_lbl:
-            status_lbl.text = text
+        if not status_lbl:
+            return
+        status_lbl.text = text
 
-            def clear_message(*_):
-                if status_lbl.text == text:
-                    status_lbl.text = ""
+        def clear_message(*_):
+            if status_lbl.text == text:
+                status_lbl.text = ""
 
-            Clock.schedule_once(clear_message, duration)
+        Clock.schedule_once(clear_message, duration)
 
-    def open_settings(self):
-        self.manager.current = "settings"
+
+# ---------------------------
+#     ROOM LIGHTS SCREEN
+# ---------------------------
+
+
+class RoomLightsScreen(MDScreen):
+    room_id = NumericProperty(-1)
+    room_name = StringProperty("")
+    loading = BooleanProperty(False)
+    lights = ListProperty([])
+
+    def set_room(self, rid: int, name: str):
+        self.room_id = rid
+        self.room_name = name
+
+    def on_pre_enter(self, *_):
+        self.fetch_lights_async()
+
+    def go_back(self, *_):
+        self.manager.current = "main"
+
+    def fetch_lights_async(self):
+        if self.room_id < 0:
+            return
+        self.loading = True
+
+        def work():
+            try:
+                details = list_lights_detailed_for_room(self.room_id)
+                items = []
+                for lid, d in details.items():
+                    items.append(
+                        {
+                            "id": int(lid),
+                            "name": d.get("name", f"Light {lid}"),
+                            "on": bool(d.get("on", False)),
+                            "bri": int(d.get("bri", 0)),
+                            "supports_color": bool(d.get("supports_color", False)),
+                        }
+                    )
+                items.sort(key=lambda x: x["name"].lower())
+
+                def assign():
+                    self.lights = items
+                    grid = self.ids.get("lights_grid")
+                    if grid:
+                        grid.clear_widgets()
+                        from .ui import LightTile
+
+                        for l in items:
+                            grid.add_widget(
+                                LightTile(
+                                    item_id=l["id"],
+                                    item_name=l["name"],
+                                    is_on=l["on"],
+                                    brightness=l["bri"],
+                                    supports_color=l["supports_color"],
+                                )
+                            )
+
+                Clock.schedule_once(lambda *_: assign())
+            except Exception as e:
+                msg = f"Lights error: {e}"
+                Clock.schedule_once(
+                    lambda *_: setattr(self.ids.status_lbl, "text", msg)
+                )
+            finally:
+                Clock.schedule_once(lambda *_: setattr(self, "loading", False))
+
+        threading.Thread(target=work, daemon=True).start()
+
+
+# ---------------------------
+#        SETTINGS
+# ---------------------------
 
 
 class SettingsScreen(MDScreen):
-    """Screen for editing Hue bridge settings."""
-
     bridge_ip = StringProperty("")
     username = StringProperty("")
 
     def go_back(self, *_):
         self.manager.current = "main"
 
-    def on_pre_enter(self):
-        """Load existing settings when entering the screen."""
+    def on_pre_enter(self, *_):
         try:
             cfg = load_config()
             self.bridge_ip = cfg.get("bridge_ip", "")
             self.username = cfg.get("username", "")
         except Exception as e:
-            # If no config yet, leave fields blank
             print(f"Could not load Hue config: {e}")
 
     def discover(self) -> None:
-        """Attempt to discover Hue bridges and update the IP field"""
-        self.ids.status_lbl.text = "Discovering Hue bridges..."
+        lbl = self.ids.status_lbl
+        lbl.text = "Discovering Hue bridges…"
+        btn = self.ids.get("btn_discover")
+        if btn:
+            btn.disabled = True
 
         def work():
             try:
-                ips = discover_bridges()
+                ips = discover_bridges(skip_cloud=True)
+                if not ips:
+                    ips = discover_bridges(skip_cloud=True)
 
                 def assign():
                     if not ips:
-                        self.ids.status_lbl.text = "No Hue bridges found on network"
-                    elif len(ips) == 1:
-                        self.bridge_ip = ips[0]
-                        self.ids.status_lbl.text = f"Discovered bridge at {ips[0]}"
-                    else:
-                        self.bridge_ip = ips[0]
-                        self.ids.status_lbl.text = (
-                            f"Found {len(ips)} bridges: using {ips[0]}"
-                        )
+                        lbl.text = "No Hue bridges found"
+                        return
+                    self.bridge_ip = ips[0]
+                    lbl.text = "Bridge: " + ", ".join(ips)
 
                 Clock.schedule_once(lambda *_: assign())
             except Exception as e:
-                Clock.schedule_once(
-                    lambda *_: setattr(
-                        self.ids.status_lbl, "text", f"Discover error: {e}"
-                    )
-                )
+                msg = f"Discover error: {e}"
+                Clock.schedule_once(lambda *_: setattr(lbl, "text", msg))
+            finally:
+                if btn:
+                    Clock.schedule_once(lambda *_: setattr(btn, "disabled", False))
 
         threading.Thread(target=work, daemon=True).start()
 
     def save(self):
-        """Save the entered settings to hue_config.json."""
         ip = self.bridge_ip.strip()
         user = self.username.strip()
-        if not ip or not user:
-            self.ids.status_lbl.text = "Bridge IP and username are required"
+        lbl = self.ids.get("status_lbl")
+        if not ip:
+            if lbl:
+                lbl.text = "Bridge IP is required"
             return
-        try:
-            save_config(ip, user)
-            self.ids.status_lbl.text = "Settings saved. Returning…"
-            # Small delay before going back
-            from kivy.clock import Clock
 
-            Clock.schedule_once(self.go_back, 1.5)
-        except Exception as e:
-            self.ids.status_lbl.text = f"Error: {e}"
+        def work():
+            try:
+                if not user:
+                    from .hue import create_user
+
+                    if lbl:
+                        Clock.schedule_once(
+                            lambda *_: setattr(
+                                lbl, "text", "Pairing… Press link button"
+                            )
+                        )
+                    new_user = create_user(ip)
+                    self.username = new_user
+                    user_to_save = new_user
+                else:
+                    user_to_save = user
+
+                save_config(ip, user_to_save)
+                if lbl:
+                    Clock.schedule_once(
+                        lambda *_: setattr(lbl, "text", "Saved. Returning…")
+                    )
+                Clock.schedule_once(self.go_back, 1.0)
+            except Exception as e:
+                if lbl:
+                    msg = f"Save error: {e}"
+                    Clock.schedule_once(lambda *_: setattr(lbl, "text", msg))
+
+        threading.Thread(target=work, daemon=True).start()
+
+
+# ---------------------------
+#           APP
+# ---------------------------
 
 
 class HueApp(MDApp):
@@ -255,23 +328,25 @@ class HueApp(MDApp):
     off_color = [0.15, 0.16, 0.19, 1]
 
     def show_message(self, text, duration=2):
-        """Proxy method so tiles can display messages via the running app."""
         if self.root:
-            main_screen = self.root.get_screen("main")
-            if main_screen:
-                main_screen.show_message(text, duration)
+            main = self.root.get_screen("main")
+            if main:
+                main.show_message(text, duration)
+
+    def open_room(self, room_id: int, room_name: str):
+        """Called from RoomTile chevron."""
+        if not self.root:
+            return
+        rl = self.root.get_screen("room_lights")
+        rl.set_room(room_id, room_name)
+        rl.fetch_lights_async()
+        self.root.current = "room_lights"
 
     def build(self):
         self.theme_cls.theme_style = "Dark"
         self.theme_cls.primary_palette = "Teal"
         self.theme_cls.primary_hue = "500"
 
-        def on_key(window, key, *_):
-            # F11 toggles fullscreen
-            if key == 293:
-                Window.fullscreen = not Window.fullscreen
-
-        Window.bind(on_key_down=on_key)
         Window.clearcolor = self.theme_color
 
         kv_path = Path(__file__).with_name("myapp.kv")
@@ -279,6 +354,7 @@ class HueApp(MDApp):
 
         sm = ScreenManager()
         sm.add_widget(MainScreen(name="main"))
+        sm.add_widget(RoomLightsScreen(name="room_lights"))
         sm.add_widget(SettingsScreen(name="settings"))
         return sm
 
